@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -228,6 +229,12 @@ SKIP = {
     "tetramatrix.github.io": "broken GitHub Pages product page",
 }
 
+HEURISTIC_KEYWORDS: dict[str, list[str]] = {
+    "priority_now": ["cold email", "outreach", "prospecting", "lead generation", "lead gen", "sales agent", "b2b lead", "verified emails", "linkedin prospecting", "crm", "sales teams"],
+    "good_fit":     ["workflow", "automation", "agent", "developer", "design", "support", "transcription", "meeting", "research", "writing", "integration", "chatbot", "voice ai", "no-code"],
+    "maybe":        ["social media", "content", "creative", "seo", "ads", "marketing", "community", "portfolio"],
+}
+
 
 @dataclass
 class SiteInfo:
@@ -423,19 +430,13 @@ def clean(text: str) -> str:
 
 
 def heuristic_label(text: str) -> tuple[str, str]:
-    if any(
-        key in text
-        for key in ["cold email", "outreach", "prospecting", "lead generation", "lead gen", "sales agent", "b2b lead", "verified emails", "linkedin prospecting", "crm", "sales teams"]
-    ):
-        return "priority_now", "direct GTM / outbound motion"
-    if any(
-        key in text
-        for key in ["workflow", "automation", "agent", "developer", "design", "support", "transcription", "meeting", "research", "writing", "integration", "chatbot", "voice ai", "no-code"]
-    ):
-        return "good_fit", "strong adjacent workflow / AI tool fit"
-    if any(key in text for key in ["social media", "content", "creative", "seo", "ads", "marketing", "community", "portfolio"]):
+    if any(key in text for key in HEURISTIC_KEYWORDS.get("priority_now", [])):
+        return "priority_now", "direct fit for your ICP"
+    if any(key in text for key in HEURISTIC_KEYWORDS.get("good_fit", [])):
+        return "good_fit", "strong adjacent fit"
+    if any(key in text for key in HEURISTIC_KEYWORDS.get("maybe", [])):
         return "maybe", "adjacent but weaker overlap"
-    return "skip", "weak overlap with target company set"
+    return "skip", "weak overlap with your ICP"
 
 
 def curate_row(row: dict[str, str]) -> dict[str, str]:
@@ -527,12 +528,42 @@ def write_workbook(path: Path, curated_rows: list[dict[str, str]], split_rows: d
     wb.save(path)
 
 
+def load_config(config_path: str | None) -> dict:
+    if config_path:
+        path = Path(config_path)
+    else:
+        path = Path.home() / ".claude" / "skills" / "producthunt-company-qualifier" / "references" / "scoring-config.json"
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-csv")
     parser.add_argument("--output-dir", default=str(Path.cwd() / "outputs"))
     parser.add_argument("--shortlist-size", type=int, default=121)
+    parser.add_argument("--config", default=None, help="Path to scoring-config.json (default: ~/.claude/skills/producthunt-company-qualifier/references/scoring-config.json)")
     args = parser.parse_args()
+
+    cfg = load_config(args.config)
+    if cfg:
+        global TIER1_WORKED, TIER2_WORKED, WISHLIST, CORE_GTM_PATTERNS, ADJACENT_PATTERNS
+        global PRIORITY_NOW, GOOD_FIT, MAYBE, SKIP, HEURISTIC_KEYWORDS
+        TIER1_WORKED = cfg.get("tier1_worked", TIER1_WORKED)
+        TIER2_WORKED = cfg.get("tier2_worked", TIER2_WORKED)
+        WISHLIST = set(cfg.get("wishlist_domains", list(WISHLIST)))
+        if "core_patterns" in cfg:
+            CORE_GTM_PATTERNS = {k: (v["regex"], v["score"]) for k, v in cfg["core_patterns"].items()}
+        if "adjacent_patterns" in cfg:
+            ADJACENT_PATTERNS = {k: (v["regex"], v["score"]) for k, v in cfg["adjacent_patterns"].items()}
+        curated = cfg.get("curated_labels", {})
+        PRIORITY_NOW = curated.get("priority_now", PRIORITY_NOW)
+        GOOD_FIT = curated.get("good_fit", GOOD_FIT)
+        MAYBE = curated.get("maybe", MAYBE)
+        SKIP = curated.get("skip", SKIP)
+        HEURISTIC_KEYWORDS = cfg.get("heuristic_keywords", HEURISTIC_KEYWORDS)
 
     input_csv = resolve_input_csv(args.input_csv)
     output_dir = Path(args.output_dir)
