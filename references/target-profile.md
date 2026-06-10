@@ -1,3 +1,8 @@
+# SETUP_REQUIRED
+# This file has not been customized yet. When you run /producthunt-company-qualifier
+# for the first time, Claude will ask you to define your target audience and
+# rewrite this file automatically. Remove this block once setup is complete.
+
 # Target Profile
 
 Worked-with comps:

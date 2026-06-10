@@ -45,6 +45,35 @@ Read `references/target-profile.md` for the full ICP fit logic.
 
 ## Step-by-Step Workflow
 
+### STEP 0 — Check target profile setup (first run only)
+
+Before anything else, read the first line of `references/target-profile.md` inside the skill directory:
+
+```python
+from pathlib import Path
+profile = Path.home() / ".claude" / "skills" / "producthunt-company-qualifier" / "references" / "target-profile.md"
+print(open(profile).readline().strip())
+```
+
+If the first line is `# SETUP_REQUIRED`, the profile has not been customized. Ask the user the following questions (one at a time, conversationally):
+
+1. **"Who are the companies you've already worked with or sold to? List as many as you can — name and a one-line description of what they do."**
+2. **"What are the strongest signals that a company is a great fit for you? Think about the problems they solve or the workflows they're involved in."**
+3. **"What are adjacent or secondary signals — companies that aren't a perfect fit but are worth a conversation?"**
+4. **"How would you describe the four outcome buckets for your leads?"**
+   - `priority_now` — direct outbound / high-intent prospect
+   - `good_fit` — strong adjacent fit, worth outreach
+   - `maybe` — possible but weaker overlap
+   - `skip` — off-target, disqualified
+
+Once you have the answers, rewrite `references/target-profile.md` with the user's profile (removing the `# SETUP_REQUIRED` block at the top). Confirm to the user: **"Target profile saved. This file is now personalized to your ICP — you can edit it any time at `references/target-profile.md`."**
+
+Then proceed to STEP 1.
+
+If the first line is NOT `# SETUP_REQUIRED`, the profile is already set up — skip directly to STEP 1.
+
+---
+
 ### STEP 1 — Check dependencies (first run only)
 
 Before the first run, verify Python packages are installed:
